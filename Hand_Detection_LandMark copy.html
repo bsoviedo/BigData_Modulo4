@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hand Detection</title>
+
+  <!-- Import MediaPipe and Drawing Utilities -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <!-- Minimal CSS to center video and canvas -->
+  <style>
+    body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    video, canvas { position: absolute; transform: rotateY(180deg); } /* Mirror video and canvas */
+  </style>
+</head>
+<body>
+
+  <!-- Video and Canvas Elements for Real-Time Detection -->
+  <video id="webcam" autoplay playsinline></video>
+  <canvas id="output_canvas"></canvas>
+
+  <!-- Main JavaScript for Hand Landmark Detection -->
+  <script type="module">
+    import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0";
+
+    let handLandmarker;          // Hand landmark detection instance
+    let runningMode = "VIDEO";    // Set running mode to video for real-time detection
+    let lastVideoTime = -1;       // Track video frame timing
+
+    // Initialize hand landmark detector
+    const initializeHandLandmarker = async () => {
+      const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm");
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: runningMode,
+        numHands: 2
+      });
+    };
+    initializeHandLandmarker(); // Initialize landmarker
+
+    const video = document.getElementById("webcam");           // Webcam video element
+    const canvas = document.getElementById("output_canvas");   // Canvas for drawing landmarks
+    const canvasCtx = canvas.getContext("2d");
+
+             //SOLUCION PARA SEGUNDO PUNTO -> OPERACIONES VECTORIALES
+             class VectorOperations {
+  // Suma de dos vectores
+  static add(vector1, vector2) {
+    return {
+      x: vector1.x + vector2.x,
+      y: vector1.y + vector2.y,
+      z: vector1.z + vector2.z
+    };
+  }
+
+  // Multiplicación de un escalar por un vector
+  static scalarMultiply(scalar, vector) {
+    return {
+      x: vector.x * scalar,
+      y: vector.y * scalar,
+      z: vector.z * scalar
+    };
+  }
+
+  // Producto punto de dos vectores
+  static dotProduct(vector1, vector2) {
+    return vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z;
+  }
+
+  // Magnitud de un vector
+  static magnitude(vector) {
+    return Math.sqrt(vector.x ** 2 + vector.y ** 2 + vector.z ** 2);
+  }
+
+  // Coseno del ángulo entre dos vectores
+  static cosineSimilarity(vector1, vector2) {
+    const dotProd = this.dotProduct(vector1, vector2);
+    const magnitude1 = this.magnitude(vector1);
+    const magnitude2 = this.magnitude(vector2);
+    
+    if (magnitude1 === 0 || magnitude2 === 0) {
+      throw new Error("La magnitud de uno de los vectores es cero");
+    }
+    
+    return dotProd / (magnitude1 * magnitude2);
+  }
+}
+
+
+
+    // Enable webcam and set up real-time detection
+    if (navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+        video.srcObject = stream;
+        video.addEventListener("loadeddata", predictWebcam);
+      });
+    } 
+/* ///SOLUCION CON VIDEO 
+    video.src = "./3944827-uhd_2160_4096_25fps.mp4";
+
+    // Configurar el video para que se reproduzca en bucle infinito
+    video.loop = true;
+
+    // Opcionalmente, puedes reproducir automáticamente el video y silenciarlo si es necesario
+    video.autoplay = true;
+    video.muted = true;
+
+    video.addEventListener("loadeddata", predictWebcam);
+*/
+
+    // Predict landmarks on each video frame
+async function predictWebcam() {
+  // Ensure canvas matches video dimensions
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  if (handLandmarker && video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+
+    // Detect hand landmarks in the current video frame
+    const results = await handLandmarker.detectForVideo(video, performance.now());
+
+
+    // Clear the canvas before each frame
+     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // If landmarks are detected, iterate through them
+    if (results.landmarks) {
+      for (const landmarks of results.landmarks) {
+        // Draw landmarks and connections
+        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: "#00FF00", lineWidth: 5 });
+        drawLandmarks(canvasCtx, landmarks, { color: "#FF0000", lineWidth: 2 });
+
+        
+         //SOLUCION PARA SEGUNDO PUNTO -> CALCULAR VECTORES DE LAS FALANGES
+          const { x, y, z } = landmarks[8];
+          function calculateVectorDifference(v1, v2) {
+            return {
+              x: v2.x - v1.x,
+              y: v2.y - v1.y,
+              z: v2.z - v1.z,
+            };
+          }
+
+
+          const vector_indice = calculateVectorDifference(landmarks[7], landmarks[6]);
+
+          const vector_medio = calculateVectorDifference(landmarks[11], landmarks[10]);
+
+          const vector_anular = calculateVectorDifference(landmarks[15], landmarks[14]);
+
+          const vector_men = calculateVectorDifference(landmarks[19], landmarks[18]);
+
+          // Umbral para la comparación
+const threshold = -2.7;
+
+// Calcular el coseno entre los vectores y verificar si están por encima del umbral
+const cosine_indice_anular = VectorOperations.cosineSimilarity(vector_indice, vector_anular);
+const cosine_indice_men = VectorOperations.cosineSimilarity(vector_indice, vector_men);
+const cosine_indice_medio = VectorOperations.cosineSimilarity(vector_indice, vector_medio);
+
+      if ((cosine_indice_anular + cosine_indice_men + cosine_indice_medio) < threshold) {
+
+                // Convert normalized coordinates (0 to 1) to canvas coordinates
+                const canvasX = x * canvas.width;
+                const canvasY = y * canvas.height;
+
+                canvasCtx.beginPath();
+                canvasCtx.arc(canvasX,canvasY, 10, 0, 2 * Math.PI);
+                canvasCtx.fillStyle = "yellow";
+                canvasCtx.fill();
+                canvasCtx.lineWidth = 4;
+                canvasCtx.strokeStyle = "red";
+                canvasCtx.stroke();
+      } 
+      }
+    }
+   }
+
+  // Call this function again for the next frame
+  requestAnimationFrame(predictWebcam);
+}
+
+  </script>
+</body>
+</html>
