@@ -63,7 +63,7 @@ el modelo se estanca en el aprendizaje de igual manera.
 ### 2.3- Pruebas ajustando la tasa de aprendizaje
 
 
-Se intenta cambiar el optimizador para ajustar la tasa de aprendizaje del modelo.
+Se intenta cambiar el optimizador para ajustar la tasa de aprendizaje del modelo. Adicionalmente, se ajusta el optimizador por uno `adam` para probar su eficacia.
 
 ```
 
