@@ -122,3 +122,9 @@ Se realizan pruebas cambiando las funciones de activación de las capas convoluc
 
 
 Con la tasa de aprendizaje anterior (0.005) se genera un resultado similar, `0.9211` de perdida y `0.90` de accuracy.
+
+
+## 3- Conclusiones
+
+Algunas modificaciones hechas a la red lograron modificar la perdida, variandola entre `0.321` y `0.9211` no obstante, el accuracy se sigue estancando en el `0.900`, lo cual indica un posible problema en la función de perdida. Se hace interesante la diferencia entre la perdida, y que aún asi el accuracy siga igual.
+
