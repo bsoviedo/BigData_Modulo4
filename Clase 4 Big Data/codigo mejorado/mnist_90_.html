@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Challenge: Investigate the 90% Accuracy Limit</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+</head>
+<body>
+ <h1>Challenge: Investigate the 90% Accuracy Limit</h1>
+  <p>In this challenge, you will explore why the LeNet model in our example consistently achieves around <strong>90% accuracy</strong> on the MNIST dataset. Your goal is to hypothesize, experiment, and explain the reasons behind this plateau in accuracy, and possibly suggest improvements.</p>
+ <h2>Deliverables</h2>
+  <ol>
+    <li><strong>Report Your Findings:</strong>
+      <ul>
+        <li>Summarize your observations about why the model is limited to 90% accuracy.</li>
+        <li>Include screenshots or plots (e.g., loss curves, accuracy comparisons, or visualized data) to support your conclusions.</li>
+      </ul>
+    </li>
+    <li><strong>Experiment Results:</strong>
+      <ul>
+        <li>Share the changes you made (if any) to improve accuracy.</li>
+        <li>Provide before-and-after accuracy metrics and explain why your adjustments worked (or didn’t work).</li>
+      </ul>
+    </li>
+    <li><strong>Propose Solutions:</strong>
+      <ul>
+        <li>Improvement of the current implementation that could help achieve higher accuracy.</li>
+      </ul>
+    </li>
+  </ol>
+  <button onclick="trainModel()">Train Model</button>
+  <p id="status">Status: Ready to train</p>
+  <p id="accuracy"></p>
+<div id="images-container"></div>
+
+  <script>
+    // Load and preprocess the MNIST dataset
+    /*async function loadMnistData() {
+      const MNIST_IMAGES_SPRITE_PATH = 'https://storage.googleapis.com/learnjs-data/model-builder/mnist_images.png';
+      const MNIST_LABELS_PATH = 'https://storage.googleapis.com/learnjs-data/model-builder/mnist_labels_uint8';
+
+      const img = new Image();
+      img.crossOrigin = '';
+      img.src = MNIST_IMAGES_SPRITE_PATH;
+      await new Promise((resolve) => {
+        img.onload = () => {
+          resolve();
+        };
+      });
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const IMAGE_SIZE = 28;
+      const NUM_CLASSES = 10;
+      const NUM_TRAIN_IMAGES = 55000; // Training set size
+      const NUM_TEST_IMAGES = 10000; // Testing set size
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      const datasetBytesBuffer = new Float32Array((NUM_TRAIN_IMAGES + NUM_TEST_IMAGES) * IMAGE_SIZE * IMAGE_SIZE);
+
+      for (let i = 0; i < NUM_TRAIN_IMAGES + NUM_TEST_IMAGES; i++) {
+        const x = (i % 100) * IMAGE_SIZE;
+        const y = Math.floor(i / 100) * IMAGE_SIZE;
+        const imageData = ctx.getImageData(x, y, IMAGE_SIZE, IMAGE_SIZE);
+
+        for (let j = 0; j < IMAGE_SIZE * IMAGE_SIZE; j++) {
+          datasetBytesBuffer[i * IMAGE_SIZE * IMAGE_SIZE + j] = imageData.data[j * 4] / 255;
+        }
+      }
+
+      const labelsResponse = await fetch(MNIST_LABELS_PATH);
+      const labels = new Uint8Array(await labelsResponse.arrayBuffer());
+
+      // Ensuring proper slicing for training and testing sets
+      const trainImages = datasetBytesBuffer.slice(0, NUM_TRAIN_IMAGES * IMAGE_SIZE * IMAGE_SIZE);
+      const testImages = datasetBytesBuffer.slice(NUM_TRAIN_IMAGES * IMAGE_SIZE * IMAGE_SIZE);
+      const trainLabels = labels.slice(0, NUM_TRAIN_IMAGES); // Corrected to NUM_TRAIN_IMAGES
+      const testLabels = labels.slice(NUM_TRAIN_IMAGES, NUM_TRAIN_IMAGES + NUM_TEST_IMAGES); // Corrected to NUM_TEST_IMAGES
+
+      return {
+        trainX: tf.tensor4d(trainImages, [NUM_TRAIN_IMAGES, 28, 28, 1]),
+        trainY: tf.oneHot(tf.tensor1d(trainLabels, 'int32'), NUM_CLASSES),
+        testX: tf.tensor4d(testImages, [NUM_TEST_IMAGES, 28, 28, 1]),
+        testY: tf.oneHot(tf.tensor1d(testLabels, 'int32'), NUM_CLASSES)
+      };
+    }*/
+async function loadMnistData() {
+    const MNIST_IMAGES_SPRITE_PATH = 'https://storage.googleapis.com/learnjs-data/model-builder/mnist_images.png';
+    const MNIST_LABELS_PATH = 'https://storage.googleapis.com/learnjs-data/model-builder/mnist_labels_uint8';
+
+    const img = new Image();
+    img.crossOrigin = '';
+    img.src = MNIST_IMAGES_SPRITE_PATH;
+
+    await new Promise((resolve) => {
+        img.onload = () => {
+            resolve();
+        };
+    });
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const IMAGE_SIZE = 28; // Cada imagen es de 28x28
+    const NUM_CLASSES = 10; // Hay 10 clases para MNIST (dígitos 0-9)
+    const NUM_TRAIN_IMAGES = 55000; // Número de imágenes de entrenamiento
+    const NUM_TEST_IMAGES = 10000; // Número de imágenes de prueba
+
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+
+    // Buffer para almacenar las imágenes procesadas
+    const datasetBytesBuffer = new Float32Array((NUM_TRAIN_IMAGES + NUM_TEST_IMAGES) * IMAGE_SIZE * IMAGE_SIZE);
+
+    for (let i = 0; i < NUM_TRAIN_IMAGES + NUM_TEST_IMAGES; i++) {
+        const y = i; // Cada fila representa una imagen
+        const imageData = ctx.getImageData(0, y, 784, 1); // Extraer toda la fila de 784 píxeles
+
+        for (let j = 0; j < IMAGE_SIZE * IMAGE_SIZE; j++) {
+            datasetBytesBuffer[i * IMAGE_SIZE * IMAGE_SIZE + j] = imageData.data[j * 4] / 255; // Normalizar
+        }
+    }
+
+    // Cargar las etiquetas
+    const labelsResponse = await fetch(MNIST_LABELS_PATH);
+    const labels = new Uint8Array(await labelsResponse.arrayBuffer());
+
+    // Separamos las imágenes de entrenamiento y prueba
+    const trainImages = datasetBytesBuffer.slice(0, NUM_TRAIN_IMAGES * IMAGE_SIZE * IMAGE_SIZE);
+    const testImages = datasetBytesBuffer.slice(NUM_TRAIN_IMAGES * IMAGE_SIZE * IMAGE_SIZE);
+    
+    // Crear las etiquetas de entrenamiento agrupadas de 10 en 10
+	// Crear las etiquetas de entrenamiento agrupadas de 10 en 10
+	const trainLabels = [];
+
+	for (let i = 0; i < NUM_TRAIN_IMAGES * 10; i += 10) { // Incrementar de 10 en 10
+		trainLabels.push(labels.slice(i, i + 10)); // Extraer bloques de 10 y agregarlos como un nuevo array
+	}
+
+	// Crear las etiquetas de prueba agrupadas de 10 en 10
+	const testLabels = [];
+
+	for (let i = NUM_TRAIN_IMAGES * 10; i < (NUM_TRAIN_IMAGES + NUM_TEST_IMAGES) * 10; i += 10) { // Incrementar de 10 en 10
+		testLabels.push(labels.slice(i, i + 10)); // Extraer bloques de 10 y agregarlos como un nuevo array
+	}
+
+    // Crear tensores para las imágenes
+    const trainX = tf.tensor4d(trainImages, [NUM_TRAIN_IMAGES, IMAGE_SIZE, IMAGE_SIZE, 1]);
+    const testX = tf.tensor4d(testImages, [NUM_TEST_IMAGES, IMAGE_SIZE, IMAGE_SIZE, 1]);
+
+
+	// Convertir etiquetas one-hot a índices
+	function convertToNumericLabels(labels) {
+		return labels.map(oneHotArray => oneHotArray.findIndex(value => value === 1));
+	}
+
+	// Convertir etiquetas de entrenamiento y prueba a índices
+	const trainNumericLabels = convertToNumericLabels(trainLabels);
+	const testNumericLabels = convertToNumericLabels(testLabels);
+
+	// Crear tensores para las etiquetas (one-hot encoding)
+	const trainY = tf.oneHot(tf.tensor1d(trainNumericLabels, 'int32'), NUM_CLASSES);
+	const testY = tf.oneHot(tf.tensor1d(testNumericLabels, 'int32'), NUM_CLASSES);
+
+	console.log("Train Y:", trainY);
+	console.log("Test Y:", testY);
+
+    // Crear tensores para las etiquetas (one-hot encoding)
+    //const trainY = tf.oneHot(tf.tensor1d(trainLabels, 'int32'), NUM_CLASSES);
+    //const testY = tf.oneHot(tf.tensor1d(testLabels, 'int32'), NUM_CLASSES);
+
+    return {
+        trainX,
+        trainY,
+        testX,
+        testY
+    };
+}
+
+function showFirst25Images(trainX, trainY) {
+    const container = document.getElementById('images-container');
+    container.innerHTML = ''; // Limpiamos el contenedor antes de añadir nuevas imágenes
+    container.style.width = "250px";
+
+    // Convertir el tensor a un arreglo para acceder a los valores
+    const imagesArray = trainX.arraySync(); // Convierte el tensor a un arreglo
+    const labelsArray = trainY.arraySync(); // Convierte el tensor de etiquetas a un arreglo
+
+    for (let i = 0; i < 25; i++) {
+        const imgData = imagesArray[i]; // Obtener la imagen i (28x28)
+        const labelData = labelsArray[i]; // Obtener la etiqueta i
+		
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 28;
+        canvas.height = 28;
+
+        const imageData = ctx.createImageData(28, 28);
+
+        for (let row = 0; row < 28; row++) {
+            for (let col = 0; col < 28; col++) {
+                const value = Math.floor(imgData[row][col] * 255); // Acceder a cada valor en imgData
+                imageData.data[(row * 28 + col) * 4] = value;       // Rojo
+                imageData.data[(row * 28 + col) * 4 + 1] = value;   // Verde
+                imageData.data[(row * 28 + col) * 4 + 2] = value;   // Azul
+                imageData.data[(row * 28 + col) * 4 + 3] = 255;      // Alfa (totalmente opaco)
+            }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+		
+		
+		        // Crear un elemento para mostrar la etiqueta
+        const labelElement = document.createElement('div');
+        labelElement.textContent = `Etiqueta: ${labelData.indexOf(1)}`; // Suponiendo que es one-hot encoding
+
+        container.appendChild(labelElement); // Añadir la etiqueta al contenedor
+		
+
+        const imgSrc = canvas.toDataURL();
+        const imgElement = document.createElement('img');
+        imgElement.src = imgSrc;
+        imgElement.alt = `Image ${i + 1}`;
+        imgElement.style.width = '150px';
+        imgElement.style.height = '150px';
+        imgElement.style.margin = '2px';
+        container.appendChild(imgElement);
+
+
+    }
+}
+
+
+
+//loadMnistData();
+
+
+    // Define the LeNet model
+    function createLeNetModel() {
+      const model = tf.sequential();
+
+      // First convolution layer
+      model.add(tf.layers.conv2d({
+        inputShape: [28, 28, 1],
+        filters: 6,
+        kernelSize: 5,
+        activation: 'tanh',
+        padding: 'same'
+      }));
+      model.add(tf.layers.averagePooling2d({ poolSize: 2, strides: 2 }));
+
+      // Second convolution layer
+      model.add(tf.layers.conv2d({
+        filters: 16,
+        kernelSize: 5,
+        activation: 'tanh'
+      }));
+      model.add(tf.layers.averagePooling2d({ poolSize: 2, strides: 2 }));
+
+      // Flatten layer
+      model.add(tf.layers.flatten());
+
+      // Fully connected layers
+      model.add(tf.layers.dense({ units: 120, activation: 'tanh' }));
+      model.add(tf.layers.dense({ units: 84, activation: 'tanh' }));
+      model.add(tf.layers.dense({ units: 10, activation: 'softmax' }));
+
+      return model;
+    }
+
+    async function trainModel() {
+      document.getElementById('status').innerText = 'Loading data...';
+      const data = await loadMnistData();
+	  
+	  showFirst25Images(data.trainX, data.trainY);
+
+
+      const model = createLeNetModel();
+      model.compile({
+        optimizer: 'sgd',
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy']
+      });
+
+      document.getElementById('status').innerText = 'Training model...';
+
+      // Train the model
+      await model.fit(data.trainX, data.trainY, {
+        epochs: 5,
+        validationData: [data.testX, data.testY],
+        callbacks: {
+          onEpochEnd: (epoch, logs) => {
+            document.getElementById('status').innerText = `Epoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, accuracy = ${logs.acc.toFixed(4)}`;
+          }
+        }
+      });
+
+      document.getElementById('status').innerText = 'Training complete. Evaluating...';
+
+      // Evaluate the model
+      const evalResult = await model.evaluate(data.testX, data.testY);
+      document.getElementById('accuracy').innerText = `Test accuracy: ${(evalResult[1].dataSync()[0] * 100).toFixed(2)}%`;
+    }
+  </script>
+</body>
+</html>
